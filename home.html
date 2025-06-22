@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home - Rainbow Social</title>
+  <style>
+    :root {
+      --glow: #fff;
+      --bg: #000;
+      --text: #fff;
+    }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(270deg, red, orange, yellow, green, cyan, blue, violet);
+      background-size: 1400% 1400%;
+      animation: rainbowBG 30s ease infinite;
+      color: var(--text);
+      background-color: var(--bg);
+      overflow-x: hidden;
+    }
+    @keyframes rainbowBG {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .glow-box, .feed-box, .users-box, .profile-box {
+      background-color: rgba(0, 0, 0, 0.7);
+      box-shadow: 0 0 15px var(--glow);
+      border-radius: 10px;
+      padding: 1rem;
+      margin: 1rem auto;
+      max-width: 600px;
+    }
+    button {
+      background: var(--glow);
+      color: black;
+      padding: 10px;
+      border: none;
+      width: 100%;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .user-link {
+      cursor: pointer;
+      color: #0ff;
+      text-decoration: underline;
+    }
+    img, video {
+      max-width: 100%;
+      max-height: 400px;
+      border-radius: 10px;
+      margin-top: 10px;
+    }
+    .cursor-dot {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9999;
+      background: rgba(255, 255, 255, 0.3);
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+    }
+    .comment-box {
+      background: rgba(255,255,255,0.05);
+      padding: 5px;
+      border-radius: 5px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="glow-box" id="mainPage">
+  <h2>Welcome, <span id="currentUserDisplay"></span> <span id="currentMood"></span></h2>
+  <p>Status: <span id="currentStatus"></span></p>
+  <input type="text" id="postText" placeholder="Write something or paste a link...">
+  <input type="file" id="postMedia" accept="image/*,video/*,image/gif">
+  <button onclick="postContent()">Post</button>
+  <button onclick="scrollToFeed()">⬇ Scroll to Feed</button>
+  <button onclick="showUsers()">👥 Users!</button>
+</div>
+
+<div class="glow-box hidden" id="messagingSection">
+  <h2>📨 Direct Messages</h2>
+  <select id="recipientSelect"><option value="">Select user to message</option></select>
+  <textarea id="messageInput" placeholder="Type your message..."></textarea>
+  <button onclick="sendMessage()">Send</button>
+  <div id="messagesDisplay" style="margin-top:20px;"></div>
+</div>
+
+<div class="feed-box" id="feed"></div>
+<div class="users-box hidden" id="usersList"></div>
+<div class="profile-box hidden" id="userProfile"></div>
+
+<script>
+  const emojiMap = { happy: '😊', sad: '😢', angry: '😠', tired: '😴' };
+  let postCooldown = 0;
+  let users = JSON.parse(localStorage.getItem("users") || "[]");
+  let posts = JSON.parse(localStorage.getItem("posts") || "[]");
+
+  function scrollToFeed() {
+    document.getElementById("feed").scrollIntoView({ behavior: "smooth" });
+  }
+
+  function renderFeed(filterUser = null) {
+    const feed = document.getElementById("feed");
+    feed.innerHTML = '<h2>Global Feed</h2>';
+    const allUsers = JSON.parse(localStorage.getItem("users") || "[]");
+    (filterUser ? posts.filter(p => p.user === filterUser) : posts).forEach((p, i) => {
+      const div = document.createElement("div");
+      div.className = "post";
+      const userObj = allUsers.find(u => u.username === p.user);
+      const emoji = emojiMap[userObj?.mood] || "";
+      const pfp = userObj?.profilePic ? `<img src="${userObj.profilePic}" style="max-height:50px;border-radius:50%;margin-right:10px;">` : "";
+      div.innerHTML = `<p>${pfp}<span class="user-link" onclick="viewUser('${p.user}')">${p.user}</span> ${emoji}<br>Status: ${userObj?.status || ''}</p><p>${p.text}</p>` +
+        (p.media ? (p.type.startsWith("video") ? `<video controls src="${p.media}"></video>` : `<img src="${p.media}">`) : "");
+      renderComments(div, i);
+      feed.appendChild(div);
+    });
+  }
+
+  function renderComments(post, postIndex) {
+    const commentInput = document.createElement("input");
+    commentInput.placeholder = "Add a comment...";
+    commentInput.addEventListener("keydown", e => {
+      if (e.key === "Enter" && commentInput.value.trim()) {
+        let comments = JSON.parse(localStorage.getItem("comments") || "{}");
+        if (!comments[postIndex]) comments[postIndex] = [];
+        comments[postIndex].push({ user: localStorage.getItem("currentUser"), text: commentInput.value });
+        localStorage.setItem("comments", JSON.stringify(comments));
+        renderFeed();
+      }
+    });
+    const comments = JSON.parse(localStorage.getItem("comments") || "{}")[postIndex] || [];
+    const commentList = comments.map(c => `<p><b>${c.user}:</b> ${c.text}</p>`).join("");
+    const div = document.createElement("div");
+    div.className = "comment-box";
+    div.innerHTML = commentList;
+    div.appendChild(commentInput);
+    post.appendChild(div);
+  }
+
+  function postContent() {
+    if (postCooldown > Date.now()) return alert("Wait 2 minutes between posts.");
+    const user = localStorage.getItem("currentUser");
+    const text = document.getElementById("postText").value;
+    const file = document.getElementById("postMedia").files[0];
+    const reader = new FileReader();
+    const savePost = (dataUrl = null, type = null) => {
+      posts.unshift({ user, text, media: dataUrl, type, time: Date.now() });
+      localStorage.setItem("posts", JSON.stringify(posts));
+      renderFeed();
+      postCooldown = Date.now() + 120000;
+    };
+    if (file) { reader.onload = () => savePost(reader.result, file.type); reader.readAsDataURL(file); }
+    else savePost();
+  }
+
+  function showUsers() {
+    const list = document.getElementById("usersList");
+    list.classList.toggle("hidden");
+    const allUsers = JSON.parse(localStorage.getItem("users") || "[]");
+    list.innerHTML = '<h2>All Users</h2>' + allUsers.map(u => {
+      const emoji = emojiMap[u.mood] || "";
+      return `<p><span class="user-link" onclick="viewUser('${u.username}')">${u.username}</span> ${emoji}<br>Status: ${u.status || ''}</p>`;
+    }).join('');
+  }
+
+  function viewUser(username) {
+    const profile = document.getElementById("userProfile");
+    profile.classList.remove("hidden");
+    const user = users.find(u => u.username === username);
+    const emoji = emojiMap[user?.mood] || "";
+    const userPosts = posts.filter(p => p.user === username);
+    let html = `<h2>${username} ${emoji}</h2><p>Status: ${user?.status || ''}</p>`;
+    if (user?.profilePic) html = `<img src="${user.profilePic}" style="max-height:80px;border-radius:50%;"><br>` + html;
+    userPosts.forEach(p => {
+      html += `<div class="post"><p>${p.text}</p>${p.media ? (p.type.startsWith("video") ? `<video controls src="${p.media}"></video>` : `<img src="${p.media}">`) : ""}</div>`;
+    });
+    html += `<button onclick="startDM('${username}')">Message 💬</button>`;
+    profile.innerHTML = html;
+    profile.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function populateUserList() {
+    const select = document.getElementById('recipientSelect');
+    const allUsers = JSON.parse(localStorage.getItem("users") || "[]");
+    const currentUser = localStorage.getItem("currentUser");
+    select.innerHTML = '<option value="">Select user to message</option>' + allUsers
+      .filter(u => u.username !== currentUser)
+      .map(u => `<option value="${u.username}">${u.username}</option>`).join('');
+  }
+
+  function sendMessage() {
+    const recipient = document.getElementById("recipientSelect").value;
+    const text = document.getElementById("messageInput").value.trim();
+    const sender = localStorage.getItem("currentUser");
+    if (!recipient || !text) return alert("Recipient and message required.");
+    let dm = JSON.parse(localStorage.getItem("dm") || "{}");
+    const key = [sender, recipient].sort().join("::");
+    if (!dm[key]) dm[key] = [];
+    dm[key].push({ from: sender, text });
+    localStorage.setItem("dm", JSON.stringify(dm));
+    document.getElementById("messageInput").value = "";
+    loadMessages();
+  }
+
+  function loadMessages() {
+    const recipient = document.getElementById("recipientSelect").value;
+    const sender = localStorage.getItem("currentUser");
+    const key = [sender, recipient].sort().join("::");
+    const dm = JSON.parse(localStorage.getItem("dm") || "{}")[key] || [];
+    const box = document.getElementById("messagesDisplay");
+    box.innerHTML = dm.map(m => `<p><b>${m.from}:</b> ${m.text}</p>`).join("");
+  }
+
+  function startDM(username) {
+    document.getElementById("recipientSelect").value = username;
+    loadMessages();
+    document.getElementById("messagingSection").scrollIntoView({ behavior: "smooth" });
+  }
+
+  document.getElementById("recipientSelect").addEventListener("change", loadMessages);
+  window.addEventListener("load", () => {
+    const currentUser = localStorage.getItem("currentUser");
+    if (!currentUser) {
+      alert("You are not logged in!");
+      window.location.href = "index.html";
+    } else {
+      const user = users.find(u => u.username === currentUser);
+      document.getElementById("currentUserDisplay").innerText = currentUser;
+      document.getElementById("currentMood").innerText = emojiMap[user?.mood] || "";
+      document.getElementById("currentStatus").innerText = user?.status || "";
+      renderFeed();
+      populateUserList();
+    }
+  });
+
+  document.addEventListener("mousemove", e => {
+    const dot = document.createElement("div");
+    dot.className = "cursor-dot";
+    dot.style.left = `${e.pageX}px`;
+    dot.style.top = `${e.pageY}px`;
+    document.body.appendChild(dot);
+    setTimeout(() => dot.remove(), 600);
+  });
+</script>
+
+</body>
+</html>
