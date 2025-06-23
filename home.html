@@ -82,6 +82,7 @@
   <input type="file" id="postMedia" accept="image/*,video/*,image/gif">
   <button onclick="postContent()">Post</button>
   <button onclick="scrollToFeed()">⬇ Scroll to Feed</button>
+    <button onclick="showInbox()">📥 Inbox</button>
   <button onclick="showUsers()">👥 Users!</button>
 </div>
 
@@ -95,6 +96,18 @@
 
 <div class="feed-box" id="feed"></div>
 <div class="users-box hidden" id="usersList"></div>
+
+<div class="glow-box hidden" id="inboxSection">
+  <h2>📥 Inbox</h2>
+  <div id="inboxList"></div>
+  <div id="inboxChat" class="hidden">
+    <h3>Chat with <span id="chatUser"></span></h3>
+    <div id="chatMessages" style="margin:10px 0;"></div>
+    <input type="text" id="chatInput" placeholder="Write a reply...">
+    <button onclick="sendReply()">Send</button>
+  </div>
+</div>
+
 <div class="profile-box hidden" id="userProfile"></div>
 
 <script>
@@ -249,6 +262,49 @@
     document.body.appendChild(dot);
     setTimeout(() => dot.remove(), 600);
   });
+
+function showInbox() {
+  const inbox = document.getElementById("inboxSection");
+  const inboxList = document.getElementById("inboxList");
+  const currentUser = localStorage.getItem("currentUser");
+  const dm = JSON.parse(localStorage.getItem("dm") || "{}");
+  const conversations = Object.entries(dm).filter(([k, v]) => k.includes(currentUser));
+
+  inbox.classList.remove("hidden");
+  document.getElementById("inboxChat").classList.add("hidden");
+  inboxList.innerHTML = "<h3>Your Conversations</h3>" +
+    conversations.map(([key]) => {
+      const other = key.split("::").find(u => u !== currentUser);
+      return `<p><span class='user-link' onclick='openChat("${other}")'>${other}</span></p>`;
+    }).join('');
+}
+
+function openChat(user) {
+  const currentUser = localStorage.getItem("currentUser");
+  const key = [currentUser, user].sort().join("::");
+  const dm = JSON.parse(localStorage.getItem("dm") || "{}")[key] || [];
+  const chatBox = document.getElementById("chatMessages");
+
+  document.getElementById("chatUser").innerText = user;
+  document.getElementById("inboxChat").classList.remove("hidden");
+  chatBox.innerHTML = dm.map(m => `<p><b>${m.from}:</b> ${m.text}</p>`).join('');
+}
+
+function sendReply() {
+  const text = document.getElementById("chatInput").value.trim();
+  const recipient = document.getElementById("chatUser").innerText;
+  const sender = localStorage.getItem("currentUser");
+  if (!text) return;
+
+  const key = [sender, recipient].sort().join("::");
+  let dm = JSON.parse(localStorage.getItem("dm") || "{}");
+  if (!dm[key]) dm[key] = [];
+  dm[key].push({ from: sender, text });
+  localStorage.setItem("dm", JSON.stringify(dm));
+  document.getElementById("chatInput").value = "";
+  openChat(recipient);
+}
+
 </script>
 
 </body>
