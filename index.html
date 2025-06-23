@@ -1,166 +1,83 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rainbow Social</title>
-  <style>
-    :root {
-      --glow: #fff;
-      --bg: #000;
-      --text: #fff;
-              :root {
-      --glow: #fff;
-    }
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: linear-gradient(270deg, red, orange, yellow, green, cyan, blue, violet);
-      background-size: 1400% 1400%;
-      animation: rainbowBG 30s ease infinite;
-      color: white;
-      overflow-x: hidden;
-    }
-    @keyframes rainbowBG {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-    .glow-box, .feed-box, .users-box, .profile-box {
-      background-color: rgba(0, 0, 0, 0.7);
-      box-shadow: 0 0 15px var(--glow);
-      border-radius: 10px;
-      padding: 1rem;
-      margin: 1rem auto;
-      max-width: 600px;
-    }
-    input, textarea, select {
-      width: 100%;
-      padding: 10px;
-      margin: 8px 0;
-      background: #111;
-      border: 1px solid var(--glow);
-      color: var(--glow);
-      border-radius: 5px;
-    }
-    button {
-      background: var(--glow);
-      color: black;
-      padding: 10px;
-      border: none;
-      width: 100%;
-      border-radius: 5px;
-      font-weight: bold;
-      cursor: pointer;
-      margin-top: 10px;
-    }
-    .hidden { display: none; }
-    .cursor-dot {
-      position: absolute;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 9999;
-      background: rgba(255, 255, 255, 0.3);
-      box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
-    }
-    .post {
-      border-top: 1px solid var(--glow);
-      padding-top: 10px;
-      margin-top: 10px;
-    }
-    a { color: cyan; text-decoration: underline; }
-    .user-link { cursor: pointer; color: #0ff; text-decoration: underline; }
-  
-    .comment-box {
-      background: rgba(255,255,255,0.05);
-      padding: 5px;
-      border-radius: 5px;
-      margin-top: 10px;
-    }
-    .toggle-btn {
-      position: fixed;
-      bottom: 10px;
-      left: 10px;
-      border: none;
-      background: none;
-      font-size: 1.5rem;
-      z-index: 1000;
-      background: transparent;
-      border: 1px solid var(--glow);
-      color: var(--text);
-      padding: 5px;
-      border-radius: 5px;
-      float: right;
-      cursor: pointer;
-      font-size: 0.8rem;
-      margin: 10px;
-    }
+# Load the actual uploaded home.html file
+home_path = "/mnt/data/home.html"
+with open(home_path, "r", encoding="utf-8") as f:
+    html = f.read()
 
-</style>
-</head>
-<body>
-  
-  <div class="glow-box" id="loginBox">
-    <form id="signupForm">
-    <h2>Login / Signup</h2>
-    <input type="text" id="username" placeholder="Username" required />
-    <input type="password" id="password" placeholder="Password" required />
-      <input type="file" id="profilePic" accept="image/png,image/jpeg" />
-    <input type="text" id="status" placeholder="Status message..." />
-    <select id="mood">
-      <option value="">Mood</option>
-      <option value="happy">Happy 😊</option>
-      <option value="sad">Sad 😢</option>
-      <option value="angry">Angry 😠</option>
-      <option value="tired">Tired 😴</option>
-    </select>
-      <button type="submit">Enter</button>
-    </form>
-<script>
-  function login() {
-    const username = document.getElementById("username").value.trim();
-    const password = document.getElementById("password").value.trim();
-    const status = document.getElementById("status").value.trim();
-    const mood = document.getElementById("mood").value;
-    const file = document.getElementById("profilePic").files[0];
+# Re-use previous steps: Add inbox section and script logic
 
-    if (!username || !password) return alert("Username and password required.");
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) return alert("Username can only contain letters, numbers, and underscores.");
-    if (username.length > 25) return alert("Username must be 25 characters or fewer.");
+# Add inbox section after profile box
+inbox_section_html = """
+<div class="glow-box hidden" id="inboxSection">
+  <h2>📥 Inbox</h2>
+  <div id="inboxList"></div>
+  <div id="inboxChat" class="hidden">
+    <h3>Chat with <span id="chatUser"></span></h3>
+    <div id="chatMessages" style="margin:10px 0;"></div>
+    <input type="text" id="chatInput" placeholder="Write a reply...">
+    <button onclick="sendReply()">Send</button>
+  </div>
+</div>
+"""
 
-    let users = JSON.parse(localStorage.getItem("users") || "[]");
-    const existing = users.find(u => u.username === username);
+html = html.replace('<div class="profile-box hidden"', inbox_section_html + '\n<div class="profile-box hidden"')
 
-    if (existing && existing.password !== password) {
-      alert("Username already taken or wrong password.");
-      return;
-    }
+# Add "Inbox" button to the main page buttons
+html = html.replace(
+    '<button onclick="scrollToFeed()">⬇ Scroll to Feed</button>',
+    '<button onclick="scrollToFeed()">⬇ Scroll to Feed</button>\n    <button onclick="showInbox()">📥 Inbox</button>'
+)
 
-    const saveUser = (profilePic) => {
-      if (!existing) {
-        users.push({ username, password, status, mood, profilePic });
-        localStorage.setItem("users", JSON.stringify(users));
-      }
-      localStorage.setItem("currentUser", username);
-      window.location.href = "home.html";
-    };
+# Inbox JavaScript functions
+inbox_script = """
+function showInbox() {
+  const inbox = document.getElementById("inboxSection");
+  const inboxList = document.getElementById("inboxList");
+  const currentUser = localStorage.getItem("currentUser");
+  const dm = JSON.parse(localStorage.getItem("dm") || "{}");
+  const conversations = Object.entries(dm).filter(([k, v]) => k.includes(currentUser));
 
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => saveUser(reader.result);
-      reader.readAsDataURL(file);
-    } else {
-      saveUser(null);
-    }
-  }
+  inbox.classList.remove("hidden");
+  document.getElementById("inboxChat").classList.add("hidden");
+  inboxList.innerHTML = "<h3>Your Conversations</h3>" +
+    conversations.map(([key]) => {
+      const other = key.split("::").find(u => u !== currentUser);
+      return `<p><span class='user-link' onclick='openChat(\"${other}\")'>${other}</span></p>`;
+    }).join('');
+}
 
-  document.getElementById("signupForm").addEventListener("submit", function(e) {
-    e.preventDefault();
-    login();
-  });
-</script>
+function openChat(user) {
+  const currentUser = localStorage.getItem("currentUser");
+  const key = [currentUser, user].sort().join("::");
+  const dm = JSON.parse(localStorage.getItem("dm") || "{}")[key] || [];
+  const chatBox = document.getElementById("chatMessages");
 
-</body>
-</html>
+  document.getElementById("chatUser").innerText = user;
+  document.getElementById("inboxChat").classList.remove("hidden");
+  chatBox.innerHTML = dm.map(m => `<p><b>${m.from}:</b> ${m.text}</p>`).join('');
+}
+
+function sendReply() {
+  const text = document.getElementById("chatInput").value.trim();
+  const recipient = document.getElementById("chatUser").innerText;
+  const sender = localStorage.getItem("currentUser");
+  if (!text) return;
+
+  const key = [sender, recipient].sort().join("::");
+  let dm = JSON.parse(localStorage.getItem("dm") || "{}");
+  if (!dm[key]) dm[key] = [];
+  dm[key].push({ from: sender, text });
+  localStorage.setItem("dm", JSON.stringify(dm));
+  document.getElementById("chatInput").value = "";
+  openChat(recipient);
+}
+"""
+
+# Inject the script logic before closing </script>
+html = html.replace("</script>", inbox_script + "\n</script>")
+
+# Save the file
+updated_home_with_inbox = "/mnt/data/home_with_inbox.html"
+with open(updated_home_with_inbox, "w", encoding="utf-8") as f:
+    f.write(html)
+
+updated_home_with_inbox
