@@ -83,6 +83,7 @@
   <button onclick="postContent()">Post</button>
   <button onclick="scrollToFeed()">⬇ Scroll to Feed</button>
     <button onclick="showInbox()">📥 Inbox</button>
+    <button onclick="showAdminPanel()">👑 Admin Panel</button>
   <button onclick="showUsers()">👥 Users!</button>
 </div>
 
@@ -106,6 +107,12 @@
     <input type="text" id="chatInput" placeholder="Write a reply...">
     <button onclick="sendReply()">Send</button>
   </div>
+</div>
+
+
+<div class="glow-box hidden" id="adminPanel">
+  
+  <div id="adminUserList"></div>
 </div>
 
 <div class="profile-box hidden" id="userProfile"></div>
@@ -133,7 +140,15 @@
       div.innerHTML = `<p>${pfp}<span class="user-link" onclick="viewUser('${p.user}')">${p.user}</span> ${emoji}<br>Status: ${userObj?.status || ''}</p><p>${p.text}</p>` +
         (p.media ? (p.type.startsWith("video") ? `<video controls src="${p.media}"></video>` : `<img src="${p.media}">`) : "");
       renderComments(div, i);
-      feed.appendChild(div);
+      
+    if (isAdmin(localStorage.getItem("currentUser"))) {
+      const btn = document.createElement("button");
+      btn.textContent = "🗑️ Remove Post";
+      btn.onclick = () => removePost(i);
+      div.appendChild(btn);
+    }
+    feed.appendChild(div);
+    
     });
   }
 
@@ -303,6 +318,85 @@ function sendReply() {
   localStorage.setItem("dm", JSON.stringify(dm));
   document.getElementById("chatInput").value = "";
   openChat(recipient);
+}
+
+
+function isAdmin(user) {
+  const admins = JSON.parse(localStorage.getItem("admins") || "[]");
+  return user === "plibble" || admins.includes(user);
+}
+
+function grantAdmin(user) {
+  const current = localStorage.getItem("currentUser");
+  if (!isAdmin(current)) return alert("You aren't allowed to do that.");
+  let admins = JSON.parse(localStorage.getItem("admins") || "[]");
+  if (!admins.includes(user)) admins.push(user);
+  localStorage.setItem("admins", JSON.stringify(admins));
+  alert(user + " is now an admin!");
+}
+
+function removeAdmin(user) {
+  const current = localStorage.getItem("currentUser");
+  if (current !== "plibble") return alert("Only plibble can remove admins.");
+  let admins = JSON.parse(localStorage.getItem("admins") || "[]");
+  admins = admins.filter(u => u !== user);
+  localStorage.setItem("admins", JSON.stringify(admins));
+  alert(user + " is no longer an admin.");
+}
+
+function deleteUser(user) {
+  const current = localStorage.getItem("currentUser");
+  if (current !== "plibble") return alert("Only plibble can remove users.");
+  let users = JSON.parse(localStorage.getItem("users") || "[]");
+  users = users.filter(u => u.username !== user);
+  localStorage.setItem("users", JSON.stringify(users));
+  alert("User removed.");
+}
+
+function renameUser(oldName, newName) {
+  if (!/^[a-zA-Z0-9_]+$/.test(newName)) return alert("Invalid name");
+  const current = localStorage.getItem("currentUser");
+  if (!isAdmin(current)) return alert("Not allowed.");
+  let users = JSON.parse(localStorage.getItem("users") || "[]");
+  const user = users.find(u => u.username === oldName);
+  if (user) user.username = newName;
+  localStorage.setItem("users", JSON.stringify(users));
+  alert("User renamed.");
+}
+
+function removePost(index) {
+  const current = localStorage.getItem("currentUser");
+  if (!isAdmin(current)) return alert("Only admins can remove posts.");
+  let posts = JSON.parse(localStorage.getItem("posts") || "[]");
+  posts.splice(index, 1);
+  localStorage.setItem("posts", JSON.stringify(posts));
+  renderFeed();
+}
+
+
+function showAdminPanel() {
+  const current = localStorage.getItem("currentUser");
+  if (!isAdmin(current)) return alert("Access denied.");
+  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const admins = JSON.parse(localStorage.getItem("admins") || "[]");
+  const panel = document.getElementById("adminPanel");
+  const container = document.getElementById("adminUserList");
+  panel.classList.remove("hidden");
+
+  container.innerHTML = users.map(u => {
+    const isAdmin = u.username === "plibble" ? "👑" : (admins.includes(u.username) ? "⭐" : "");
+    return `
+      <div style="border-top:1px solid #fff; padding:10px;">
+        <b>${u.username}</b> ${isAdmin}<br>
+        Password: ${u.password}<br>
+        <input placeholder="Rename..." id="rn_${u.username}">
+        <button onclick="renameUser('${u.username}', document.getElementById('rn_${u.username}').value)">Rename</button>
+        ${u.username !== 'plibble' ? `
+        <button onclick="deleteUser('${u.username}')">Delete</button>
+        <button onclick="grantAdmin('${u.username}')">Make Admin</button>
+        <button onclick="removeAdmin('${u.username}')">Remove Admin</button>` : ''}
+      </div>`;
+  }).join('');
 }
 
 </script>
